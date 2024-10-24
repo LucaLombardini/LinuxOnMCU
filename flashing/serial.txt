@@ -1,0 +1,1 @@
+sudo screen /dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_066BFF495057717867143741-if02 115200
