@@ -1,6 +1,6 @@
 init
 
-program ~/Scrivania/development/stm32f401re_lnx_5.12/build/stm32/vmlinux verify 0x08000000
+program ../kernel/build/stm32/vmlinux.bin verify 0x08000000
 
 reset
 
