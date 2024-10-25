@@ -1,0 +1,7 @@
+init
+
+program $BINARY_PATH verify $FLASH_START_ADDRESS
+
+reset
+
+exit
