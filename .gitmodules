@@ -7,3 +7,6 @@
 [submodule "cramfs-tools"]
 	path = cramfs-tools
 	url = /home/luca/Scrivania/polito/OSes/project/cramfs-tools/cramfs-tools.git
+[submodule "LinuxKernelMCU"]
+	path = LinuxKernelMCU
+	url = https://github.com/LucaLombardini/LinuxKernelMCU
