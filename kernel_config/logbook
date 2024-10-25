@@ -1,0 +1,200 @@
+2024-08-02
+
+The dev repository now hooks to torvalds/linux as upstream in order to fetch new
+tags.
+The development starts from Linux 6.1 which is a SLTS release planned to be 
+supported until 2033.
+The initial target architecture is now an STM32H753, which is really similar to
+STM32H743. The latter is stated to be natively supported by Linux.
+The compilation for the mach=arm and configuration stm32_defconfig is the one 
+used as a first analysis. By supporting only STM32H743, the compilation produces
+a kernel which is too large: 
+
+   text	   data	    bss	    dec	    hex	filename
+2504832	 296373	 110016	2911221	 2c6bf5	build/stm32h743/vmlinux
+
+The target has 2 MB of Flash and 1 MB of SRAM.
+
+Thus, the kernel configuration must start from where it was left on the previous
+development targeting Linux 5.12. Start by making a minimal configuration.
+
+make ARCH=arm O=build/stm32 tinyconfig
+
+This minimal configuration is used for kernel comparison and is called 
+vmlinux.ref.
+
+// Kernel Modules
+Linux is a monolithic kernel with monolithic and loadable modules. It make sense
+to remove the unnecessary modules in order to reduce the kernel's .text 
+footprint. The file modules.builtin contains the actual modules built in the 
+kernel.
+Unfortunately, the minimal kernel has only the following built-in modules:
+
+kernel/lib/math/rational.ko
+kernel/lib/crypto/libblake2s.ko --> GOOD CANDIDATE?
+kernel/lib/crc32.ko --> SEE LATER
+kernel/drivers/bus/simple-pm-bus.ko
+
+// nm to KConfig
+By analyzing the compiled symbols with nm and sorting by size, the uppermost
+items are read-only tables used for CRC calculations. These are 3 tables, 8 KB 
+each.
+For these items, their size depend on the adopted algorithm for CRC32's 
+calculation. The slowest and smallest (in .text) is the Sawarte's algorithm 
+which calculates 1 B at a time. Below, the improvement is shown.
+
+./scripts/bloat-o-meter build/stm32/vmlinux.ref build/stm32/vmlinux
+add/remove: 0/1 grow/shrink: 3/3 up/down: 76/-21732 (-21656)
+Function                                     old     new   delta
+__crc32c_le_base                               8      40     +32
+crc32_le_base                                 10      34     +24
+crc32_be_base                                 20      40     +20
+crc32_body                                   228       -    -228
+crc32table_le                               8192    1024   -7168
+crc32table_be                               8192    1024   -7168
+crc32ctable_le                              8192    1024   -7168
+Total: Before=638240, After=616584, chg -3.39%
+
+The nm-analyzed's largest symbol is blake2s_testvecs, which is 8 KB.
+
+2024-08-04
+The library libblake2s is actually used to implement /dev/random, thus it is 
+always built-in (as stated in lib/crypto/Makefile).
+The minimal kernel's built-in modules are mandatory for the following reasons:
+
+kernel/lib/math/rational.ko         : used by clock (not wallclock)
+kernel/lib/crypto/libblake2s.ko     : used by /dev/random
+kernel/lib/crc32.ko                 : used by arm arch
+kernel/drivers/bus/simple-pm-bus.ko : used by Power Management Bus interface
+
+2024-08-09
+For what concerns the libblake, it is used to feed the random number generator.
+Thus, if random() syscall could be removed, all the structures related to it 
+will shrink or disappear completely. Unfortunately, random is used within the 
+regular kernel routines. Ultimately, it cannot be removed.
+
+2024-08-12
+// Serial TTY device
+STM32 SoCs have the possibility to exploit the STLink serial communication for 
+debug and data transfer purposes.
+A headless system could exploit a serial communication channel in order to 
+retrieve and send data to another device. Some interesting use cases could be 
+serial terminals for headless systems over the serial channel and debug channels
+over it.
+
+In order to adopt this serial architecture, the processor family must be chosen.
+
+2024-09-05
+Thus the next step is to choose the the system type as "STM32 Family" and then 
+the most similar SoC.
+This option enables a lot of interfaces for the STM32 like GPIO, QSPI and so on.
+Thus the kernel size increased a lot.
+
+./scripts/bloat-o-meter build/stm32/vmlinux.prev build/stm32/vmlinux
+add/remove: 831/0 grow/shrink: 24/1 up/down: 98609/-248 (98361)
+...
+Total: Before=616584, After=714945, chg +15.95%
+
+In fact it increased in a not negligible way. Thus, this project should not 
+include most of the code and data structure that are not mandatory.
+The PIN declaration in Linux's STM32 is mostly based on strings. It could be 
+optimized.
+
+2024-09-16
+The initialization of the GPIO is the module's init that has the largest 
+footprint on the .text section, more precisely in terms of read-only data 
+(>24kB). This section is the "stm32h743_pins", which is a blob of strings 
+bound to each GPIO pin. These strings contain the information about the pin 
+features in a human-readable string format. Thus, in order to reduce the section
+"stm32h743_pins", a possible solution could be to switch to enum integers and 
+use a LUT for when the string information is needed.
+For the moment, the main target is to have a running Linux system which at least
+is able to boot.
+
+So, the configuration continues.
+Now, the support to printk is enabled in order to retrieve information about the kernel on the serial communication.
+The impact is the following (just printk support enabled)
+
+./scripts/bloat-o-meter build/stm32/vmlinux.prev build/stm32/vmlinux
+...
+Total: Before=714945, After=1297669, chg +81.51%
+
+The increase is huge. Mostly due to "_printk_rb_static_infos", "__log_buf", "_printk_rb_static_descs" and more...
+Then the buffer impact (buffer size tweak, 4kB each)
+
+dd/remove: 0/0 grow/shrink: 0/3 up/down: 0/-523776 (-523776)
+Function                                     old     new   delta
+_printk_rb_static_descs                    49152    1536  -47616
+__log_buf                                 131072    4096 -126976
+_printk_rb_static_infos                   360448   11264 -349184
+Total: Before=1297669, After=773893, chg -40.36%
+
+Maybe even lower by code editing?
+Enable tty, disable virtual terminal, enable uni98 pty, disable legacy pty, tty driver to output user messages on printk, STM32 serial port support and support for console on stm32
+
+./scripts/bloat-o-meter build/stm32/vmlinux.prev build/stm32/vmlinux
+add/remove: 547/0 grow/shrink: 23/0 up/down: 57678/0 (57678)
+...
+Total: Before=773893, After=831571, chg +7.45%
+
+printk over tty impact (flags) (???)
+
+executeInPlace from 0x08000000
+add/remove: 0/0 grow/shrink: 2/0 up/down: 28/0 (28)
+Function                                     old     new   delta
+__mmap_switched_data                          28      44     +16
+__mmap_switched                               78      90     +12
+Total: Before=831571, After=831599, chg +0.00%
+
+NOTE : LAST KERNEL BUILD PERFORMED ON lenovoZ50. Switch to another PC with 
+different environment. config.lenovoZ50 stops being updated here.
+
+Ubuntu 24.04 ships with a different set of default tools than Ubuntu 20.04. Running diff on the exported kernel's config file before and after the compilation on the other PC reveals the tools difference, together with the update of other copilation tuning flags.
+
+diff ../../LinuxOnMCU/kernel_config/config build/stm32/.config
+5c5
+< CONFIG_CC_VERSION_TEXT="arm-linux-gnueabihf-gcc (Ubuntu 9.4.0-1ubuntu1~20.04.2) 9.4.0"
+---
+> CONFIG_CC_VERSION_TEXT="arm-linux-gnueabihf-gcc (Ubuntu 13.2.0-23ubuntu4) 13.2.0"
+7c7
+< CONFIG_GCC_VERSION=90400
+---
+> CONFIG_GCC_VERSION=130200
+10c10
+< CONFIG_AS_VERSION=23400
+---
+> CONFIG_AS_VERSION=24200
+12c12
+< CONFIG_LD_VERSION=23400
+---
+> CONFIG_LD_VERSION=24200
+15a16,17
+> CONFIG_CC_HAS_ASM_GOTO_OUTPUT=y
+> CONFIG_CC_HAS_ASM_GOTO_TIED_OUTPUT=y
+251a254
+> CONFIG_CC_HAVE_STACKPROTECTOR_TLS=y
+1017a1021,1023
+> CONFIG_CC_HAS_AUTO_VAR_INIT_PATTERN=y
+> CONFIG_CC_HAS_AUTO_VAR_INIT_ZERO_BARE=y
+> CONFIG_CC_HAS_AUTO_VAR_INIT_ZERO=y
+1018a1025,1026
+> # CONFIG_INIT_STACK_ALL_PATTERN is not set
+> # CONFIG_INIT_STACK_ALL_ZERO is not set
+1020a1029,1030
+> CONFIG_CC_HAS_ZERO_CALL_USED_REGS=y
+> # CONFIG_ZERO_CALL_USED_REGS is not set
+1134a1145
+> CONFIG_HAVE_KCSAN_COMPILER=y
+
+Most notably, Ubuntu 24.04 ships with GCC version 130200, while Ubuntu 20.04 
+has GCC version 90400. Running the bloat-o-meter reveals that the new compiler 
+produces a sligtly thinner kernel.
+
+./scripts/bloat-o-meter /dev/null build/stm32/vmlinux
+add/remove: 9337/0 grow/shrink: 0/0 up/down: 821798/0 (821798)
+...
+Total: Before=0, After=821798, chg +0.00%
+./scripts/bloat-o-meter /media/.../vmlinux.lenovoz50 build/stm32/vmlinux
+...
+add/remove: 112/111 grow/shrink: 652/1254 up/down: 15075/-24876 (-9801)
+Total: Before=831599, After=821798, chg -1.18%
