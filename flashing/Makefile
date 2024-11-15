@@ -5,7 +5,7 @@ OCD_CONNECT_SCRIPT   ?= openocd-stlink.ocd
 OCD_FLASH_SCRIPT     ?= flash_binary.ocd
 CONFIG_XIP_PHYS_ADDR ?= 0x08000000
 KERNEL_BUILD_PATH    ?= ../LinuxKernelMCU/build/stm32
-BINARY_PATHNAME      := $(KERNEL_BUILD_PATH)/vmlinux.bin
+BINARY_PATHNAME      := $(KERNEL_BUILD_PATH)/arch/arm/boot/xipImage
 MCU_SPECS            ?= arch/stm32/STM32H753ZI.cfg
 
 ################################################################################
