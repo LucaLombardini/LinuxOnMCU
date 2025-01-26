@@ -1,0 +1,10 @@
+externalButton: Miscellaneous.Button @ gpioPortC
+    -> gpioPortC@13
+
+externalLed1: Miscellaneous.LED @ gpioPortB
+externalLed2: Miscellaneous.LED @ gpioPortB
+externalLed3: Miscellaneous.LED @ gpioPortB
+
+gpioPortB:
+    0 -> externalLed@0
+
