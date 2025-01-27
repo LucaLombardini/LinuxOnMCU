@@ -4,7 +4,7 @@
 using sysbus
 $name?="STM32H753_Nucleo"
 mach create $name
-machine LoadPlatformDescription @platforms/boards/stm32h753_nucleo-kit.repl
+machine LoadPlatformDescription /customPlatforms/boards/stm32h753_nucleo-kit.repl
 
 #cpu PerformanceInMips 125
 # Is this the correct MIPS value?
