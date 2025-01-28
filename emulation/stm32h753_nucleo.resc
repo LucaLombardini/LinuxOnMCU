@@ -4,7 +4,7 @@
 using sysbus
 $name?="STM32H753_Nucleo"
 mach create $name
-machine LoadPlatformDescription /customPlatforms/boards/stm32h753_nucleo-kit.repl
+machine LoadPlatformDescription @/customPlatform/boards/stm32h753_nucleo-kit.repl
 
 #cpu PerformanceInMips 125
 # Is this the correct MIPS value?
@@ -12,7 +12,7 @@ cpu PerformanceInMips 1024
 
 #$bin?=@https://dl.antmicro.com/projects/renode/stm32f4discovery.elf-s_445441-827a0dedd3790f4559d7518320006613768b5e72
 #Set the elf file to load
-$bin?=/kernel/vmlinux
+$bin?=@/kernel/vmlinux
 
 # Is it the correct UART?
 showAnalyzer sysbus.uart4
