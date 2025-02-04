@@ -1,0 +1,37 @@
+:name: STM32H753 Nucleo
+:description: This script runs Linux on STM32h753 Nucleo.
+
+using sysbus
+$name?="STM32H753_Nucleo"
+mach create $name
+machine LoadPlatformDescription @/customPlatform/boards/stm32h753_nucleo-kit.repl
+
+#cpu PerformanceInMips 125
+# Is this the correct MIPS value?
+cpu PerformanceInMips 1024
+
+#$bin?=@https://dl.antmicro.com/projects/renode/stm32f4discovery.elf-s_445441-827a0dedd3790f4559d7518320006613768b5e72
+#Set the elf file to load
+$bin?=@/kernel/vmlinux
+
+# Is it the correct UART?
+showAnalyzer sysbus.uart4
+
+### Set random board UNIQUE ID ###
+
+python "import _random"
+python "rand = _random.Random()"
+
+$id1 = `python "print rand.getrandbits(32)"`
+$id2 = `python "print rand.getrandbits(32)"`
+$id3 = `python "print rand.getrandbits(32)"`
+macro reset
+"""
+    sysbus LoadELF $bin
+
+    sysbus WriteDoubleWord 0x1FF1E800 $id1
+    sysbus WriteDoubleWord 0x1FF1E804 $id2
+    sysbus WriteDoubleWord 0x1FF1E808 $id3
+"""
+
+runMacro $reset

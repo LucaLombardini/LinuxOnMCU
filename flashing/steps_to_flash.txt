@@ -1,0 +1,20 @@
+# path to the test/example project
+cd ~/STM32CubeIDE/workspace_1.15.1/openOCD_f401_demo/
+
+# path to the flasher package for the project
+cd ~/STM32CubeIDE/workspace_1.15.1/openOCD_f401_demo/FlashTool/
+
+# copy pre-built script shipped with openOCD? optional?
+cp /usr/share/openocd/scripts/target/stm32f4x* .
+
+# write the scripts for openOCD
+vim openocd-stlink.ocd
+vim flash_program.ocd
+
+# path to the targets scirpts
+/usr/share/openocd/scripts/target/
+
+# load the executable
+openocd -f ./openocd-stlink.ocd -f ./flash_program.ocd
+
+# example from chatGPT : https://chatgpt.com/c/c80a294b-4517-479a-91e5-0db362b84ca4

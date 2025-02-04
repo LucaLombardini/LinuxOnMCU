@@ -1,0 +1,7 @@
+init
+
+program ../kernel/build/stm32/vmlinux.bin verify 0x08000000
+
+reset
+
+exit
